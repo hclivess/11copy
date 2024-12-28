@@ -301,7 +301,7 @@ class BackupApp(ctk.CTk):
                 source_path = os.path.abspath(source_dir)
                 target_path = os.path.abspath(target_dir)
 
-                if os.path.commonpath([source_path]) == os.path.commonpath([source_path, target_path]):
+                if os.path.abspath(target_path).startswith(os.path.abspath(source_path)):
                     self.status_var.set(f"Target cannot be inside source: {target_dir}")
                     continue
 
