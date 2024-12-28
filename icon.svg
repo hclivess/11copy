@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Background -->
+  <rect x="2" y="2" width="60" height="60" rx="12" fill="#2196F3"/>
+  
+  <!-- Copy icon -->
+  <rect x="16" y="12" width="24" height="30" rx="2" fill="#ffffff" fill-opacity="0.9"/>
+  <rect x="24" y="22" width="24" height="30" rx="2" fill="#ffffff" fill-opacity="0.7"/>
+  
+  <!-- Number 11 -->
+  <text x="20" y="32" font-family="Arial" font-size="14" font-weight="bold" fill="#2196F3">11</text>
+</svg>
