@@ -5,6 +5,106 @@ import shutil
 from pathlib import Path
 import hashlib
 from tkinter import filedialog, messagebox
+from typing import List, Dict
+
+
+class FolderPairFrame(ctk.CTkFrame):
+    def __init__(self, master, index: int, initial_data: Dict, on_remove=None, on_change=None):
+        super().__init__(master)
+        self.index = index
+        self.on_remove = on_remove
+        self.on_change = on_change
+
+        # Create inner frame for better organization
+        self.inner_frame = ctk.CTkFrame(self)
+        self.inner_frame.pack(fill="x", padx=5, pady=5)
+
+        # Pair header with remove button
+        header_frame = ctk.CTkFrame(self.inner_frame)
+        header_frame.pack(fill="x", pady=(0, 5))
+
+        pair_label = ctk.CTkLabel(
+            header_frame,
+            text=f"Folder Pair {index + 1}",
+            font=ctk.CTkFont(size=14, weight="bold")
+        )
+        pair_label.pack(side="left", padx=5)
+
+        remove_btn = ctk.CTkButton(
+            header_frame,
+            text="Remove",
+            width=80,
+            height=25,
+            command=self._on_remove
+        )
+        remove_btn.pack(side="right", padx=5)
+
+        # Source Directory
+        source_frame = ctk.CTkFrame(self.inner_frame)
+        source_frame.pack(fill="x", pady=2)
+
+        source_label = ctk.CTkLabel(source_frame, text="Source:", width=60)
+        source_label.pack(side="left", padx=5)
+
+        self.source_var = ctk.StringVar(value=initial_data.get("source_dir", ""))
+        self.source_entry = ctk.CTkEntry(source_frame, textvariable=self.source_var, width=350)
+        self.source_entry.pack(side="left", padx=5)
+
+        source_btn = ctk.CTkButton(
+            source_frame,
+            text="Browse",
+            width=80,
+            command=lambda: self._browse_directory("source")
+        )
+        source_btn.pack(side="left", padx=5)
+
+        # Target Directory
+        target_frame = ctk.CTkFrame(self.inner_frame)
+        target_frame.pack(fill="x", pady=2)
+
+        target_label = ctk.CTkLabel(target_frame, text="Target:", width=60)
+        target_label.pack(side="left", padx=5)
+
+        self.target_var = ctk.StringVar(value=initial_data.get("target_dir", ""))
+        self.target_entry = ctk.CTkEntry(target_frame, textvariable=self.target_var, width=350)
+        self.target_entry.pack(side="left", padx=5)
+
+        target_btn = ctk.CTkButton(
+            target_frame,
+            text="Browse",
+            width=80,
+            command=lambda: self._browse_directory("target")
+        )
+        target_btn.pack(side="left", padx=5)
+
+        # Bind changes
+        self.source_var.trace_add("write", self._on_change)
+        self.target_var.trace_add("write", self._on_change)
+
+    def _browse_directory(self, dir_type: str):
+        directory = filedialog.askdirectory()
+        if directory:
+            if dir_type == "source":
+                self.source_var.set(directory)
+            else:
+                self.target_var.set(directory)
+
+    def _on_remove(self):
+        if self.on_remove:
+            self.on_remove(self.index)
+
+    def _on_change(self, *args):
+        if self.on_change:
+            self.on_change(self.index, {
+                "source_dir": self.source_var.get(),
+                "target_dir": self.target_var.get()
+            })
+
+    def get_data(self) -> Dict:
+        return {
+            "source_dir": self.source_var.get(),
+            "target_dir": self.target_var.get()
+        }
 
 
 class BackupApp(ctk.CTk):
@@ -13,31 +113,39 @@ class BackupApp(ctk.CTk):
 
         # Configure window
         self.title("11copy")
-        self.geometry("700x500")
+        self.geometry("800x600")
 
         # Set the theme
-        ctk.set_appearance_mode("system")  # Use system theme
-        ctk.set_default_color_theme("blue")  # Default color theme
+        ctk.set_appearance_mode("system")
+        ctk.set_default_color_theme("blue")
 
         # Load or create config
         self.config_file = "config.json"
         self.config = self.load_config()
 
+        # Initialize folder pairs list
+        self.folder_pairs: List[FolderPairFrame] = []
+
         self.create_gui()
 
-    def load_config(self):
+        # Load saved folder pairs
+        for pair_data in self.config.get("folder_pairs", []):
+            self.add_folder_pair(pair_data)
+
+    def load_config(self) -> Dict:
         try:
             with open(self.config_file, 'r') as f:
                 return json.load(f)
         except FileNotFoundError:
-            return {"source_dir": "", "target_dir": ""}
+            return {"folder_pairs": []}
 
     def save_config(self):
+        self.config["folder_pairs"] = [pair.get_data() for pair in self.folder_pairs]
         with open(self.config_file, 'w') as f:
             json.dump(self.config, f, indent=4)
 
     def create_gui(self):
-        # Main frame with consistent padding
+        # Main frame
         self.main_frame = ctk.CTkFrame(self)
         self.main_frame.pack(fill="both", expand=True, padx=15, pady=15)
 
@@ -49,65 +157,19 @@ class BackupApp(ctk.CTk):
         )
         header.pack(pady=10)
 
-        # Source Directory
-        source_frame = ctk.CTkFrame(self.main_frame)
-        source_frame.pack(fill="x", padx=10, pady=5)
+        # Scrollable frame for folder pairs
+        self.scroll_frame = ctk.CTkScrollableFrame(self.main_frame)
+        self.scroll_frame.pack(fill="both", expand=True, padx=10, pady=5)
 
-        source_label = ctk.CTkLabel(
-            source_frame,
-            text="Source Directory:",
-            font=ctk.CTkFont(size=14)
+        # Add Folder Pair button
+        add_btn = ctk.CTkButton(
+            self.main_frame,
+            text="Add Folder Pair",
+            command=lambda: self.add_folder_pair()
         )
-        source_label.pack(anchor="w", pady=5, padx=5)
+        add_btn.pack(pady=10)
 
-        self.source_var = ctk.StringVar(value=self.config["source_dir"])
-        self.source_entry = ctk.CTkEntry(
-            source_frame,
-            textvariable=self.source_var,
-            width=480,
-            height=32
-        )
-        self.source_entry.pack(side="left", padx=5)
-
-        source_btn = ctk.CTkButton(
-            source_frame,
-            text="Browse",
-            width=100,
-            height=32,
-            command=self.select_source
-        )
-        source_btn.pack(side="left", padx=5)
-
-        # Target Directory
-        target_frame = ctk.CTkFrame(self.main_frame)
-        target_frame.pack(fill="x", padx=10, pady=5)
-
-        target_label = ctk.CTkLabel(
-            target_frame,
-            text="Target Directory:",
-            font=ctk.CTkFont(size=14)
-        )
-        target_label.pack(anchor="w", pady=5, padx=5)
-
-        self.target_var = ctk.StringVar(value=self.config["target_dir"])
-        self.target_entry = ctk.CTkEntry(
-            target_frame,
-            textvariable=self.target_var,
-            width=480,
-            height=32
-        )
-        self.target_entry.pack(side="left", padx=5)
-
-        target_btn = ctk.CTkButton(
-            target_frame,
-            text="Browse",
-            width=100,
-            height=32,
-            command=self.select_target
-        )
-        target_btn.pack(side="left", padx=5)
-
-        # Progress bar
+        # Progress frame
         progress_frame = ctk.CTkFrame(self.main_frame)
         progress_frame.pack(fill="x", padx=10, pady=5)
 
@@ -115,7 +177,6 @@ class BackupApp(ctk.CTk):
         self.progress_bar.pack(fill="x", padx=5, pady=5)
         self.progress_bar.set(0)
 
-        # Status
         self.status_var = ctk.StringVar(value="Ready")
         self.status_label = ctk.CTkLabel(
             progress_frame,
@@ -128,7 +189,7 @@ class BackupApp(ctk.CTk):
         options_frame = ctk.CTkFrame(self.main_frame)
         options_frame.pack(fill="x", padx=10, pady=5)
 
-        # Left side checkboxes
+        # Checkboxes
         checks_frame = ctk.CTkFrame(options_frame)
         checks_frame.pack(side="left", fill="x", padx=5)
 
@@ -148,7 +209,7 @@ class BackupApp(ctk.CTk):
         )
         validate_check.pack(side="left", padx=5)
 
-        # Right side button
+        # Start button
         backup_btn = ctk.CTkButton(
             options_frame,
             text="Start Backup",
@@ -172,9 +233,34 @@ class BackupApp(ctk.CTk):
         )
         theme_switch.pack(side="right")
 
-        # Bind entry changes
-        self.source_var.trace_add("write", self.on_source_change)
-        self.target_var.trace_add("write", self.on_target_change)
+    def add_folder_pair(self, initial_data: Dict = None):
+        if initial_data is None:
+            initial_data = {"source_dir": "", "target_dir": ""}
+
+        pair_frame = FolderPairFrame(
+            self.scroll_frame,
+            len(self.folder_pairs),
+            initial_data,
+            on_remove=self.remove_folder_pair,
+            on_change=self.on_pair_change
+        )
+        pair_frame.pack(fill="x", pady=5)
+        self.folder_pairs.append(pair_frame)
+        self.save_config()
+
+    def remove_folder_pair(self, index: int):
+        if 0 <= index < len(self.folder_pairs):
+            self.folder_pairs[index].destroy()
+            self.folder_pairs.pop(index)
+
+            # Update indices of remaining pairs
+            for i, pair in enumerate(self.folder_pairs):
+                pair.index = i
+
+            self.save_config()
+
+    def on_pair_change(self, index: int, data: Dict):
+        self.save_config()
 
     def toggle_theme(self):
         if ctk.get_appearance_mode() == "Dark":
@@ -182,30 +268,7 @@ class BackupApp(ctk.CTk):
         else:
             ctk.set_appearance_mode("Dark")
 
-    def on_source_change(self, *args):
-        self.config['source_dir'] = self.source_var.get()
-        self.save_config()
-
-    def on_target_change(self, *args):
-        self.config['target_dir'] = self.target_var.get()
-        self.save_config()
-
-    def select_source(self):
-        directory = filedialog.askdirectory()
-        if directory:
-            self.source_var.set(directory)
-            self.config['source_dir'] = directory
-            self.save_config()
-
-    def select_target(self):
-        directory = filedialog.askdirectory()
-        if directory:
-            self.target_var.set(directory)
-            self.config['target_dir'] = directory
-            self.save_config()
-
-    def _calculate_md5(self, filepath):
-        """Calculate MD5 hash of a file"""
+    def _calculate_md5(self, filepath: str) -> str:
         hash_md5 = hashlib.md5()
         with open(filepath, "rb") as f:
             for chunk in iter(lambda: f.read(4096), b""):
@@ -213,37 +276,54 @@ class BackupApp(ctk.CTk):
         return hash_md5.hexdigest()
 
     def start_backup(self):
-        source_dir = self.source_var.get()
-        target_dir = self.target_var.get()
-
-        if not source_dir or not target_dir:
-            messagebox.showerror("Error", "Please select both source and target directories")
+        if not self.folder_pairs:
+            messagebox.showerror("Error", "Please add at least one folder pair")
             return
 
-        if not os.path.exists(source_dir):
-            messagebox.showerror("Error", "Source directory does not exist")
-            return
-
-        # Prevent backup into source directory with proper path comparison
-        source_path = os.path.abspath(source_dir)
-        target_path = os.path.abspath(target_dir)
-
-        # Compare normalized paths
-        if os.path.commonpath([source_path]) == os.path.commonpath([source_path, target_path]):
-            messagebox.showerror("Error", "Target directory cannot be inside source directory")
-            return
+        total_files = 0
+        copied_files = 0
 
         try:
-            self.perform_backup(source_dir, target_dir)
-            messagebox.showinfo("Success", "Backup completed successfully!")
+            # Process each folder pair
+            for pair in self.folder_pairs:
+                data = pair.get_data()
+                source_dir = data["source_dir"]
+                target_dir = data["target_dir"]
+
+                if not source_dir or not target_dir:
+                    continue
+
+                if not os.path.exists(source_dir):
+                    self.status_var.set(f"Source directory does not exist: {source_dir}")
+                    continue
+
+                # Prevent backup into source directory
+                source_path = os.path.abspath(source_dir)
+                target_path = os.path.abspath(target_dir)
+
+                if os.path.commonpath([source_path]) == os.path.commonpath([source_path, target_path]):
+                    self.status_var.set(f"Target cannot be inside source: {target_dir}")
+                    continue
+
+                # Perform backup for this pair
+                files = self.perform_backup(source_dir, target_dir)
+                total_files += files[0]
+                copied_files += files[1]
+
+            if total_files > 0:
+                messagebox.showinfo("Success", f"Backup completed! Processed {copied_files} of {total_files} files.")
+            else:
+                messagebox.showinfo("Complete", "No files needed updating")
+
             self.status_var.set("Backup completed successfully!")
             self.progress_bar.set(1)
+
         except Exception as e:
             messagebox.showerror("Error", f"Backup failed: {str(e)}")
             self.status_var.set(f"Error: {str(e)}")
 
-    def perform_backup(self, source_dir, target_dir):
-        self.status_var.set("Analyzing files...")
+    def perform_backup(self, source_dir: str, target_dir: str) -> tuple[int, int]:
+        self.status_var.set(f"Analyzing files in {source_dir}...")
         self.progress_bar.set(0)
         self.update()
 
@@ -260,11 +340,9 @@ class BackupApp(ctk.CTk):
                 src_file = os.path.join(root, file)
                 dst_file = os.path.join(target_dir, rel_path, file)
 
-                # Skip files with path too long
-                if len(dst_file) >= 260:
+                if len(dst_file) >= 260:  # Skip files with path too long
                     continue
 
-                # Check if file needs to be updated or validated
                 needs_copy = False
                 needs_validation = self.validate_var.get()
 
@@ -287,11 +365,9 @@ class BackupApp(ctk.CTk):
                     dst_file = os.path.join(root, file)
                     src_file = os.path.join(source_dir, rel_path, file)
 
-                    # Skip files with path too long
-                    if len(src_file) >= 260:
+                    if len(src_file) >= 260:  # Skip files with path too long
                         continue
 
-                    # Check if file needs to be updated or validated
                     needs_copy = False
                     needs_validation = self.validate_var.get()
 
@@ -312,7 +388,7 @@ class BackupApp(ctk.CTk):
         if total_files == 0:
             self.status_var.set("No files need updating")
             self.progress_bar.set(1)
-            return
+            return (0, 0)
 
         # Perform the actual backup
         for src_file, dst_file, rel_path, direction, needs_copy in files_to_copy:
@@ -333,7 +409,8 @@ class BackupApp(ctk.CTk):
                     src_md5 = self._calculate_md5(src_file)
                     dst_md5 = self._calculate_md5(dst_file)
                     if src_md5 != dst_md5:
-                        raise Exception("File validation failed - checksums don't match")
+                        raise Exception(
+                            f"File validation failed for {os.path.basename(src_file)} - checksums don't match")
 
                 copied_files += 1
 
@@ -346,6 +423,8 @@ class BackupApp(ctk.CTk):
             self.status_var.set(f"{action_text} files... ({copied_files}/{total_files}) {direction_text}")
             self.progress_bar.set(copied_files / total_files)
             self.update()
+
+        return (total_files, copied_files)
 
 
 def main():
