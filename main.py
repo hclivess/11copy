@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 from pathlib import Path
+import hashlib
 from tkinter import filedialog, messagebox
 
 
@@ -36,7 +37,7 @@ class BackupApp(ctk.CTk):
             json.dump(self.config, f, indent=4)
 
     def create_gui(self):
-        # Create main frame with consistent padding
+        # Main frame with consistent padding
         self.main_frame = ctk.CTkFrame(self)
         self.main_frame.pack(fill="both", expand=True, padx=15, pady=15)
 
@@ -48,7 +49,7 @@ class BackupApp(ctk.CTk):
         )
         header.pack(pady=10)
 
-        # Source Directory Frame
+        # Source Directory
         source_frame = ctk.CTkFrame(self.main_frame)
         source_frame.pack(fill="x", padx=10, pady=5)
 
@@ -77,7 +78,7 @@ class BackupApp(ctk.CTk):
         )
         source_btn.pack(side="left", padx=5)
 
-        # Target Directory Frame
+        # Target Directory
         target_frame = ctk.CTkFrame(self.main_frame)
         target_frame.pack(fill="x", padx=10, pady=5)
 
@@ -121,22 +122,46 @@ class BackupApp(ctk.CTk):
             textvariable=self.status_var,
             wraplength=700
         )
-        self.status_label.pack(pady=10)
+        self.status_label.pack(pady=5)
 
-        # Backup Button
+        # Options Frame
+        options_frame = ctk.CTkFrame(self.main_frame)
+        options_frame.pack(fill="x", padx=10, pady=5)
+
+        # Left side checkboxes
+        checks_frame = ctk.CTkFrame(options_frame)
+        checks_frame.pack(side="left", fill="x", padx=5)
+
+        self.two_way_var = ctk.BooleanVar(value=False)
+        two_way_check = ctk.CTkCheckBox(
+            checks_frame,
+            text="Two-way sync",
+            variable=self.two_way_var
+        )
+        two_way_check.pack(side="left", padx=5)
+
+        self.validate_var = ctk.BooleanVar(value=False)
+        validate_check = ctk.CTkCheckBox(
+            checks_frame,
+            text="Validate copies",
+            variable=self.validate_var
+        )
+        validate_check.pack(side="left", padx=5)
+
+        # Right side button
         backup_btn = ctk.CTkButton(
-            self.main_frame,
+            options_frame,
             text="Start Backup",
             font=ctk.CTkFont(size=15, weight="bold"),
             width=200,
-            height=50,
+            height=40,
             command=self.start_backup
         )
-        backup_btn.pack(pady=20)
+        backup_btn.pack(side="right", padx=5)
 
         # Theme switcher
         theme_frame = ctk.CTkFrame(self.main_frame)
-        theme_frame.pack(fill="x", padx=20, pady=(20, 0))
+        theme_frame.pack(fill="x", padx=10, pady=5)
 
         theme_switch = ctk.CTkSwitch(
             theme_frame,
@@ -179,6 +204,14 @@ class BackupApp(ctk.CTk):
             self.config["target_dir"] = directory
             self.save_config()
 
+    def _calculate_md5(self, filepath):
+        """Calculate MD5 hash of a file"""
+        hash_md5 = hashlib.md5()
+        with open(filepath, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_md5.update(chunk)
+        return hash_md5.hexdigest()
+
     def start_backup(self):
         source_dir = self.source_var.get()
         target_dir = self.target_var.get()
@@ -214,11 +247,13 @@ class BackupApp(ctk.CTk):
         self.progress_bar.set(0)
         self.update()
 
-        # Create target directory if it doesn't exist
+        # Create directories if they don't exist
         os.makedirs(target_dir, exist_ok=True)
 
         # First scan to determine which files need copying
         files_to_copy = []
+
+        # Source to target scan
         for root, dirs, files in os.walk(source_dir):
             rel_path = os.path.relpath(root, source_dir)
             for file in files:
@@ -229,18 +264,47 @@ class BackupApp(ctk.CTk):
                 if len(dst_file) >= 260:
                     continue
 
-                # Check if file needs to be updated
+                # Check if file needs to be updated or validated
                 needs_copy = False
-                if not os.path.exists(dst_file):
-                    needs_copy = True
-                else:
+                needs_validation = self.validate_var.get()
+
+                if os.path.exists(dst_file):
                     src_mtime = os.path.getmtime(src_file)
                     dst_mtime = os.path.getmtime(dst_file)
                     if src_mtime > dst_mtime:
                         needs_copy = True
+                else:
+                    needs_copy = True
 
-                if needs_copy:
-                    files_to_copy.append((src_file, dst_file, rel_path))
+                if needs_copy or needs_validation:
+                    files_to_copy.append((src_file, dst_file, rel_path, "source", needs_copy))
+
+        # Target to source scan (if two-way sync is enabled)
+        if self.two_way_var.get():
+            for root, dirs, files in os.walk(target_dir):
+                rel_path = os.path.relpath(root, target_dir)
+                for file in files:
+                    dst_file = os.path.join(root, file)
+                    src_file = os.path.join(source_dir, rel_path, file)
+
+                    # Skip files with path too long
+                    if len(src_file) >= 260:
+                        continue
+
+                    # Check if file needs to be updated or validated
+                    needs_copy = False
+                    needs_validation = self.validate_var.get()
+
+                    if os.path.exists(src_file):
+                        dst_mtime = os.path.getmtime(dst_file)
+                        src_mtime = os.path.getmtime(src_file)
+                        if dst_mtime > src_mtime:
+                            needs_copy = True
+                    else:
+                        needs_copy = True
+
+                    if needs_copy or needs_validation:
+                        files_to_copy.append((dst_file, src_file, rel_path, "target", needs_copy))
 
         total_files = len(files_to_copy)
         copied_files = 0
@@ -251,20 +315,35 @@ class BackupApp(ctk.CTk):
             return
 
         # Perform the actual backup
-        for src_file, dst_file, rel_path in files_to_copy:
+        for src_file, dst_file, rel_path, direction, needs_copy in files_to_copy:
             try:
-                # Ensure target subdirectory exists
-                os.makedirs(os.path.dirname(dst_file), exist_ok=True)
+                if needs_copy:
+                    # Ensure target subdirectory exists
+                    os.makedirs(os.path.dirname(dst_file), exist_ok=True)
 
-                # Copy file with metadata
-                shutil.copy2(src_file, dst_file)
+                    # Copy file with metadata
+                    shutil.copy2(src_file, dst_file)
+
+                # Validate if enabled (both for copied and existing files)
+                if self.validate_var.get():
+                    action = "Validating" if not needs_copy else "Copying"
+                    self.status_var.set(f"{action} {os.path.basename(src_file)}...")
+                    self.update()
+
+                    src_md5 = self._calculate_md5(src_file)
+                    dst_md5 = self._calculate_md5(dst_file)
+                    if src_md5 != dst_md5:
+                        raise Exception("File validation failed - checksums don't match")
+
                 copied_files += 1
 
             except Exception as e:
-                self.status_var.set(f"Error copying {os.path.basename(src_file)}: {str(e)}")
+                self.status_var.set(f"Error processing {os.path.basename(src_file)}: {str(e)}")
                 continue
 
-            self.status_var.set(f"Copying files... ({copied_files}/{total_files})")
+            direction_text = "→" if direction == "source" else "←"
+            action_text = "Validating" if not needs_copy else "Copying"
+            self.status_var.set(f"{action_text} files... ({copied_files}/{total_files}) {direction_text}")
             self.progress_bar.set(copied_files / total_files)
             self.update()
 
