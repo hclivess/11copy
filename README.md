@@ -1,4 +1,6 @@
 # 11copy
+![alt text](thumb.png)
+
 
 A modern file synchronization tool built with Python and CustomTkinter. 11copy provides easy and reliable file synchronization with validation capabilities.
 
