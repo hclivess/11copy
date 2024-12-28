@@ -1,26 +1,27 @@
 # 11copy
 
-A simple, modern backup tool built with Python and CustomTkinter. 11copy provides an easy way to keep directories in sync with a clean, user-friendly interface.
+A modern file synchronization tool built with Python and CustomTkinter. 11copy provides easy and reliable file synchronization with validation capabilities.
 
 ## Features
 
-- Modern, clean user interface with dark/light mode support
-- Incremental backup (only copies changed or new files)
+- Fast and reliable file copying
+- Two-way synchronization option
+- File validation using MD5 checksums
+- Modern, clean user interface
+- Dark/light mode support
 - Real-time progress tracking
-- Preserves file metadata
-- Remembers last used directories
-- Path collision detection
-- Windows path length handling
-- System theme integration
+- Incremental backup (only copies changed files)
+- Smart path handling
+- Configuration persistence
 
 ## Installation
 
-1. Make sure you have Python 3.7+ installed
-2. Install the required dependencies:
+1. Ensure Python 3.7+ is installed
+2. Install required dependency:
 ```bash
 pip install customtkinter
 ```
-3. Download the `11copy.py` file
+3. Download `11copy.py`
 
 ## Usage
 
@@ -31,53 +32,95 @@ python 11copy.py
 
 ### Basic Operation:
 
-1. Select source directory using the "Browse" button or by typing the path
-2. Select target directory using the "Browse" button or by typing the path
-3. Click "Start Backup" to begin the backup process
+1. Select source directory using "Browse" or enter path
+2. Select target directory using "Browse" or enter path
+3. Configure sync options:
+   - Two-way sync: Enable to sync files in both directions
+   - Validate copies: Enable to verify file integrity
+4. Click "Start Backup" to begin
 
-The application will:
-- Remember your last used directories
-- Only copy files that are new or modified
-- Show progress during the backup
-- Prevent backing up into source directory
-- Handle long path names automatically
+### Sync Modes:
 
-### Features:
+- **One-way sync** (default)
+  - Copies newer files from source to target
+  - Does not delete any files
+  - Preserves target-only files
 
-- **Smart Copy**: Only copies files that have changed or don't exist in the target
-- **Progress Tracking**: Shows real-time progress of the backup operation
-- **Theme Support**: Includes dark/light mode toggle
-- **Directory Memory**: Saves your last used directories in config.json
-- **Error Handling**: Provides clear error messages for common issues
+- **Two-way sync**
+  - Synchronizes files in both directions
+  - Copies newer files to either location
+  - Does not delete any files
+  - Safe bidirectional updates
+
+### Validation:
+
+When enabled, validation:
+- Calculates MD5 checksums of files
+- Verifies integrity of copied files
+- Validates existing files
+- Shows validation progress
+- Reports any mismatches
+
+### Features in Detail:
+
+- **Smart Copy**
+  - Only copies new or modified files
+  - Preserves file metadata
+  - Handles long paths
+  - Prevents recursive copying
+
+- **Progress Tracking**
+  - Shows current operation
+  - Displays file counts
+  - Indicates sync direction
+  - Real-time status updates
+
+- **UI Features**
+  - Dark/light mode toggle
+  - Clear status messages
+  - Directory memory
+  - Progress bar
+
+## Configuration
+
+Settings are stored in `config.json`:
+- Last used source directory
+- Last used target directory
 
 ## Technical Details
 
-The application uses:
-- CustomTkinter for the modern UI
-- JSON for configuration storage
-- Python's built-in file handling libraries
-- Incremental backup strategy
-
-Configuration is stored in `config.json` in the same directory as the application.
+- Built with Python 3.7+
+- Uses CustomTkinter for modern UI
+- MD5 for file validation
+- Non-destructive operations
+- Handles paths up to 260 characters
 
 ## Limitations
 
-- No compression
+- No file compression
 - No encryption
-- Single direction sync (source → target)
-- Windows path length limit of 260 characters applies
+- Doesn't delete files
+- Windows path length limit (260 chars)
+
+## Common Messages
+
+- "No files need updating": All files are synchronized
+- "Validating files...": Checking file integrity
+- "Copying files...": Transferring new/modified files
+- "→": Source to target direction
+- "←": Target to source direction (in two-way mode)
 
 ## Error Messages
 
-Common error messages and their meaning:
-- "Target directory cannot be inside source directory": Prevents recursive backup situations
-- "Path too long": File path exceeds Windows 260 character limit
-- "Source directory does not exist": The specified source directory is invalid
+- "Target directory cannot be inside source directory": Prevents recursive copying
+- "Path too long": File path exceeds Windows limit
+- "Validation failed": File integrity check failed
+- "Source directory does not exist": Invalid source path
 
 ## Contributing
 
-Feel free to submit issues and enhancement requests!
+Issues and pull requests are welcome!
 
 ## License
 
-MIT License - feel free to use and modify for your own projects.
+MIT License - free to use and modify
