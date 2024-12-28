@@ -183,25 +183,25 @@ class BackupApp(ctk.CTk):
             ctk.set_appearance_mode("Dark")
 
     def on_source_change(self, *args):
-        self.config["source_dir"] = self.source_var.get()
+        self.config['source_dir'] = self.source_var.get()
         self.save_config()
 
     def on_target_change(self, *args):
-        self.config["target_dir"] = self.target_var.get()
+        self.config['target_dir'] = self.target_var.get()
         self.save_config()
 
     def select_source(self):
         directory = filedialog.askdirectory()
         if directory:
             self.source_var.set(directory)
-            self.config["source_dir"] = directory
+            self.config['source_dir'] = directory
             self.save_config()
 
     def select_target(self):
         directory = filedialog.askdirectory()
         if directory:
             self.target_var.set(directory)
-            self.config["target_dir"] = directory
+            self.config['target_dir'] = directory
             self.save_config()
 
     def _calculate_md5(self, filepath):
